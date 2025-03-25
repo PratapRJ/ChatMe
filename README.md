@@ -11,7 +11,7 @@ ChatMe is a real-time chat application built using **Kotlin** and **Firebase Fir
 - **Modern UI**: Simple and interactive user interface.
 
 ## Technologies Used
-- **Android Studio** (Kotlin + XML)
+- **Android Studio** (Kotlin + Jetpack Compose)
 - **Firebase Firestore** (for real-time database)
 - **Firebase Authentication** (optional for user login)
 
