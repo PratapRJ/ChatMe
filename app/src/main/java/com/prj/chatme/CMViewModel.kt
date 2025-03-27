@@ -171,7 +171,7 @@ class CMViewModel @Inject constructor(
                         if (it.isSuccessful) {
                             signInSuccess.value = true
                             Log.d("TAG", "Success")
-                            createOrUpdateProfile(name, number)
+                            createOrUpdateProfile(name, number, email)
                             updateFCMToken()
                         } else {
                             Log.d("TAG", "Failed")
@@ -241,6 +241,7 @@ class CMViewModel @Inject constructor(
     fun createOrUpdateProfile(
         name: String? = null,
         number: String? = null,
+        email: String? = null,
         lastSeen: String? = null,
         online: Boolean = true,
         imageUrl: String? = null,
@@ -252,6 +253,7 @@ class CMViewModel @Inject constructor(
             userId = uid,
             name = name ?: userData.value?.name,
             number = number ?: userData.value?.number,
+            email = email ?: userData.value?.email,
             online = online,
             lastSeen = lastSeen ?: userData.value?.lastSeen,
             imageUrl = imageUrl ?: userData.value?.imageUrl,

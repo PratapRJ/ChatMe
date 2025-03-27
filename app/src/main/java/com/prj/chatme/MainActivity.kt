@@ -10,13 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.google.firebase.messaging.FirebaseMessaging
 import com.prj.chatme.screens.ChatScreen
 import com.prj.chatme.screens.LoginScreen
@@ -26,6 +30,7 @@ import com.prj.chatme.ui.theme.ChatMeTheme
 import com.prj.chatme.screens.ChatListScreen
 import com.prj.chatme.screens.SplashScreen
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 
 sealed class DestinatinScreen(var route: String) {
     object ChatList : DestinatinScreen("chatList")
@@ -45,8 +50,9 @@ class MainActivity : ComponentActivity() {
         NotificationPermissionHelper.checkAndRequestNotificationPermission(this)
         enableEdgeToEdge()
         setContent {
-            ChatMeTheme {
 
+            ChatMeTheme {
+                HideSystemBars()
                 ChatAppNavigation()
 
             }
@@ -83,6 +89,29 @@ class MainActivity : ComponentActivity() {
         super.onRestart()
         ViewModelProvider(this).get(CMViewModel::class.java).userIsOnline()
     }
+    @Composable
+    fun HideSystemBars() {
+        val systemUiController = rememberSystemUiController()
+
+        LaunchedEffect(Unit) {
+            // Hide both the status bar and navigation bar
+            systemUiController.isStatusBarVisible = false
+            systemUiController.isNavigationBarVisible = false
+
+            // Ensure bars auto-hide if user swipes them up
+            systemUiController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+            while (true) {
+                delay(3000) // Wait for 3 seconds
+                systemUiController.isStatusBarVisible = false // Hide status bar again
+                systemUiController.isNavigationBarVisible = false // Hide navigation bar again
+            }
+        }
+    }
+
+
+
 
 
     @Composable

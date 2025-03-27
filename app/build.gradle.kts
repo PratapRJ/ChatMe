@@ -74,6 +74,8 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.31.1-alpha")
+
 
     implementation("com.google.auth:google-auth-library-oauth2-http:1.15.0")
 
