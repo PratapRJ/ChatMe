@@ -41,7 +41,7 @@ fun SplashScreen(navController: NavController, vm: CMViewModel) {
             coroutineScope.launch {
                 scale.animateTo(1f,tween(2000))
             }
-            delay(3000)
+           // delay(3000)
             if(vm.signInSuccess.value){
                 navController.navigate("chatList")
             }else{
