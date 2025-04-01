@@ -1,9 +1,13 @@
 package com.prj.chatme.screens
 
+import android.widget.ImageButton
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +49,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.runtime.*
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.onFocusChanged
@@ -62,8 +67,30 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
+import com.prj.chatme.CommonAlertDialog
+import com.prj.chatme.R
 import com.prj.chatme.data.MessageStatus
 import com.prj.chatme.data.UserData
+import com.prj.chatme.ui.theme.DarkGreen
+import com.prj.chatme.ui.theme.DarkOrange
+import com.prj.chatme.ui.theme.Green
+import com.prj.chatme.ui.theme.sendMessageBgColor
+import java.time.LocalDate
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.scale
+import kotlinx.coroutines.delay
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -82,6 +109,7 @@ fun ChatScreen(navController: NavController, vm: CMViewModel, chatId: String) {
         reply = ""
     }
     val chatMessage = vm.chatMessages.value
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(key1 = Unit) {
         vm.pupulateMessages(chatId)
@@ -93,7 +121,11 @@ fun ChatScreen(navController: NavController, vm: CMViewModel, chatId: String) {
     }
 
 
-    Column {
+    Column(
+        modifier = Modifier.clickable {
+            focusManager.clearFocus()
+        }
+    ) {
         ChatHeader(
             name = chatUser.name ?: "",
             imageUrl = chatUser.imageUrl ?: "",
@@ -105,7 +137,13 @@ fun ChatScreen(navController: NavController, vm: CMViewModel, chatId: String) {
 
         }
 
-        Column(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f)) {
+            Image(
+                painter = painterResource(id = R.drawable.chat_wallpaper),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
             MessageBox(
                 chatMessages = chatMessage,
                 chatUser = chatUser,
@@ -120,25 +158,27 @@ fun ChatScreen(navController: NavController, vm: CMViewModel, chatId: String) {
                     fontSize = 14.sp,
                     modifier = Modifier
                         .padding(start = 16.dp, top = 4.dp)
-                        .align(alignment = Alignment.Start)
+                        .align(Alignment.BottomStart)
                 )
             }
+            ReplyBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .align(Alignment.BottomCenter),
+                reply = reply,
+                onReplyChange = { reply = it },
+                onSendReply = onSendReply,
+                vm = vm,
+                chatId = chatId,
+                focusManager = focusManager
+            )
         }
 
 
-
-        ReplyBox(
-            reply = reply,
-            onReplyChange = { reply = it },
-            onSendReply = onSendReply,
-            vm = vm,
-            chatId = chatId
-        )
     }
 
 }
-
-
 
 
 @Composable
@@ -151,6 +191,9 @@ fun MessageBox(
     currentUserId: String
 ) {
     val listState = rememberLazyListState()
+    var showDialog = rememberSaveable {
+        mutableStateOf(false)
+    }
 
     // Scroll to the bottom when chatMessages change
     LaunchedEffect(chatMessages) {
@@ -163,6 +206,12 @@ fun MessageBox(
         modifier = modifier,
         state = listState
     ) {
+        var prevDate: String = ""
+        val formatter = DateTimeFormatter.ofPattern("EEE MMM dd", Locale.ENGLISH)
+
+        val today = LocalDate.now()
+        val yesterday = today.minusDays(1)
+        var dateMsgStamp = ""
         items(chatMessages) { msg ->
             LaunchedEffect(msg) {
                 if (msg.sendBy != currentUserId && msg.status == MessageStatus.SENT) {
@@ -170,79 +219,126 @@ fun MessageBox(
                 }
             }
 
+
             val alignment = if (msg.sendBy != currentUserId) Alignment.Start else Alignment.End
-            val color = if (msg.sendBy == currentUserId) Color(0xFF68C400) else Color(0xFFC0C0C0)
+            val color = if (msg.sendBy == currentUserId) sendMessageBgColor else Color.White
+
+
+                dateMsgStamp = if (msg.timestamp.toString().substring(0, 10) == yesterday.format(
+                        formatter
+                    )
+                ) "Yesterday" else if (msg.timestamp.toString()
+                        .substring(0, 10) == today.format(formatter)
+                ) "Today" else msg.timestamp.toString().substring(0, 10)
+
+
+            if(prevDate!=msg.timestamp.toString().substring(0, 10)) {
+                Row (modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center) {
+                    Text(
+                        text = "  $dateMsgStamp  ",
+                        color = Color.Gray,
+                        modifier = Modifier
+                            .padding(top = 8.dp, bottom = 8.dp)
+                            .background(Color.White, shape = RoundedCornerShape(80.dp))
+                            .clip(RoundedCornerShape(20.dp))
+                    )
+                }
+                prevDate = msg.timestamp.toString().substring(0, 10)
+            }
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(8.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onLongPress = {
+                                showDialog.value = true
+                            }
+                        )
+                    },
                 horizontalAlignment = alignment
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(color)
+                        .background(if(msg.message=="Message Deleted") Color.Gray else color)
                         .padding(start = 8.dp, top = 4.dp, end = 4.dp, bottom = 4.dp)
                 ) {
                     Text(
                         text = msg.message ?: "",
-                        color = Color.Black,
+                        color = if(msg.message=="Message Deleted") Color.White else Color.Black,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
-                            .align(Alignment.CenterVertically)
-                            .padding(top = 4.dp, start = 4.dp, bottom = 20.dp, end = 10.dp)
+                            .padding(top = 4.dp, start = 4.dp, bottom = 5.dp, end = 10.dp)
+                            .widthIn(min = 0.dp, max = 300.dp) // Max width 300.dp, wrap if smaller
+                            .wrapContentWidth()
                     )
 
                     // Convert timestamp to 12-hour format
                     val formattedTime = try {
-                        val inputFormatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss z yyyy", Locale.ENGLISH)
+                        val inputFormatter = DateTimeFormatter.ofPattern(
+                            "EEE MMM dd HH:mm:ss z yyyy",
+                            Locale.ENGLISH
+                        )
                         val outputFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH)
                         val parsedDate = LocalDateTime.parse(msg.timestamp, inputFormatter)
                         parsedDate.format(outputFormatter)
                     } catch (e: Exception) {
                         "Invalid Time"
                     }
+                    if(msg.message!="Message Deleted") {
+                        Row(modifier = Modifier.align(Alignment.End)) {
+                            Text(
+                                text = formattedTime,
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .padding(start = 4.dp, end = 4.dp)
+                            )
 
-                    Text(
-                        text = formattedTime,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .padding(start = 4.dp, end = 4.dp)
-                            .align(Alignment.Bottom)
-                    )
+                            if (msg.sendBy == currentUserId) {
+                                val tickIcon = when (msg.status) {
+                                    MessageStatus.SENT -> Icons.Rounded.Done
+                                    MessageStatus.DELIVERED -> Icons.Rounded.Done
+                                    MessageStatus.READ -> Icons.Rounded.Done
+                                }
+                                val tickColor = when (msg.status) {
+                                    MessageStatus.READ -> Color.Blue
+                                    MessageStatus.DELIVERED -> Color.Gray
+                                    else -> Color.Red
+                                }
 
-                    if (msg.sendBy == currentUserId) {
-                        val tickIcon = when (msg.status) {
-                            MessageStatus.SENT -> Icons.Rounded.Done
-                            MessageStatus.DELIVERED -> Icons.Rounded.Done
-                            MessageStatus.READ -> Icons.Rounded.Done
+                                Icon(
+                                    imageVector = tickIcon,
+                                    contentDescription = "Message Status",
+                                    tint = tickColor,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .padding(start = 4.dp)
+                                )
+                            }
                         }
-                        val tickColor = when (msg.status) {
-                            MessageStatus.READ -> Color.Blue
-                            MessageStatus.DELIVERED -> Color.Gray
-                            else -> Color.Red
-                        }
-
-                        Icon(
-                            imageVector = tickIcon,
-                            contentDescription = "Message Status",
-                            tint = tickColor,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .padding(start = 4.dp)
-                                .align(Alignment.Bottom)
-                        )
                     }
                 }
+            }
+            if (showDialog.value) {
+                CommonAlertDialog(
+                    message = "Do you still want to delete this message?",
+                    showDialog,
+                    onSuccess = {
+                        vm.deleteMsg(chatId,msg.timestamp.toString())
+                        showDialog.value = false
+                    },
+                    onDismiss = {
+                        showDialog.value = false
+                    }
+                )
             }
         }
     }
 }
-
-
 
 
 //@Composable
@@ -290,47 +386,55 @@ fun MessageBox(
 //}
 
 
-@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
+@OptIn(
+    ExperimentalComposeUiApi::class,
+    ExperimentalFoundationApi::class,
+    ExperimentalMaterial3Api::class
+)
 @Composable
 fun ReplyBox(
+    modifier: Modifier = Modifier,
     reply: String,
     onReplyChange: (String) -> Unit,
     vm: CMViewModel,
     chatId: String,
-    onSendReply: () -> Unit
+    onSendReply: () -> Unit,
+    focusManager: FocusManager
 ) {
-    val focusManager = LocalFocusManager.current
+
     val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
 
     val bringIntoViewRequester =
         remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .imePadding()
-    ) {
-        CommonDivider()
+    // Count lines entered
+    val lineCount = reply.count { it == '\n' } + 2
+    val maxVisibleLines = 5 // Maximum height for 5 lines
 
+    // Adjust height dynamically
+    val textFieldHeight = (lineCount * 25).coerceAtMost(maxVisibleLines * 25)
+
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            BasicTextField(
+            OutlinedTextField(
                 value = reply,
                 onValueChange = {
                     onReplyChange(it)
-
-                    // Set typing = true when user types something, false when empty
                     vm.updateTypingStatus(it.isNotEmpty())
                     vm.updateChatUserStatus(chatId = chatId)
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.CenterVertically)
+                    .height(textFieldHeight.dp) // 🔥 Dynamic height
+                    .padding(start = 8.dp, end = 16.dp)
                     .onFocusChanged { focusState ->
                         coroutineScope.launch {
                             bringIntoViewRequester.bringIntoView()
@@ -339,25 +443,57 @@ fun ReplyBox(
                             vm.updateTypingStatus(false)
                             vm.updateChatUserStatus(chatId = chatId)
                         }
-                    },
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                    }
+                    .background(Color.White, shape = RoundedCornerShape(80.dp))
+                    .clip(RoundedCornerShape(20.dp)),
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Default,  // 🔹 Allow Enter key
+                    keyboardType = KeyboardType.Text
+                ),
                 keyboardActions = KeyboardActions(
                     onSend = {
                         onSendReply()
                         keyboardController?.hide()
                         focusManager.clearFocus()
                     }
+                ),
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    containerColor = Color.White
                 )
             )
 
-            Button(onClick = {
-                onSendReply()
-                keyboardController?.hide()
-                focusManager.clearFocus()
-            }) {
-                Text(text = "Send")
+
+            Card(
+                shape = CircleShape,
+                modifier = Modifier
+                    .size(50.dp)
+                    .clickable {
+                        onSendReply()
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                    }
+                    .align(Alignment.Bottom),
+                colors = CardDefaults.cardColors(
+                    containerColor = Green,
+                    contentColor = Color.White,
+                    disabledContainerColor = Color.Gray,
+                    disabledContentColor = Color.White
+                )
+            ) {
+                Icon(
+                    Icons.Default.Send,
+                    contentDescription = "Send",
+                    Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+
         }
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 

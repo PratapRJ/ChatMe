@@ -3,9 +3,13 @@ package com.prj.chatme
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.core.text.isDigitsOnly
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.Request
 import com.android.volley.toolbox.Volley
@@ -32,10 +36,16 @@ import com.prj.chatme.data.Status
 import com.prj.chatme.data.USER_NODE
 import com.prj.chatme.data.UserData
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.lang.Exception
 import java.lang.reflect.Method
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
@@ -62,10 +72,17 @@ class CMViewModel @Inject constructor(
     //These are for updating online and lastSeen status
     private var isUser1Online = mutableStateOf(false)
     private var isUser2Online = mutableStateOf(false)
-    private var user1LastSeen : String? = ""
-    private var user2LastSeen : String? = ""
+    private var user1LastSeen: String? = ""
+    private var user2LastSeen: String? = ""
     private var isUser1Typing = mutableStateOf(false)
     private var isUser2Typing = mutableStateOf(false)
+
+    private val _messageStatuses = MutableStateFlow<Map<String, String>>(emptyMap())
+    val messageStatuses: StateFlow<Map<String, String>> = _messageStatuses
+
+    var AllButtonClicked by  mutableStateOf(true)
+    var ReadButtonClicked by  mutableStateOf(false)
+    var UnreadButtonClicked by  mutableStateOf(false)
 
 
     init {
@@ -75,6 +92,20 @@ class CMViewModel @Inject constructor(
             getUserData(it)
         }
 
+    }
+
+
+
+    fun fetchMessageStatuses(chats : List<ChatData>) {
+        viewModelScope.launch {
+            val statuses = mutableMapOf<String, String>()
+            chats.forEach { chat ->
+                getLastMessageStatus(chat.chatId, chat.lastMessageId) { status ->
+                    statuses[chat.chatId ?: ""] = status ?: ""
+                }
+            }
+            _messageStatuses.value = statuses
+        }
     }
 
     fun login(email: String, password: String) {
@@ -109,12 +140,12 @@ class CMViewModel @Inject constructor(
                 if (value != null) {
                     chatMessages.value = value.documents.mapNotNull {
                         it.toObject<Message>()
-                    }.sortedBy { it.timestamp }
+                    }.sortedBy { it.index } // 👈 Sort messages by newest first
                     inProgressChatsMessages.value = false
-
                 }
             }
     }
+
 
     fun dePopulateMessages() {
         chatMessages.value = listOf()
@@ -144,18 +175,49 @@ class CMViewModel @Inject constructor(
     }
 
 
+    fun onSendReply(chatId: String, message: String, userInChat: Boolean = false) {
+        if (message.isNotEmpty()) {
+            val time = Calendar.getInstance().time.toString()
+
+            // Fetch lastMessageIndex asynchronously
+            db.collection(CHATS).document(chatId).get().addOnSuccessListener { document ->
+                val lastMessageIndex = document.getLong("lastMessageIndex")?.toInt() ?: 0
+
+                val msg = Message(
+                    lastMessageIndex + 1,
+                    userData.value?.userId,
+                    message,
+                    time,
+                    userInChat
+                )
+
+                // Save message to Firestore
+                db.collection(CHATS).document(chatId).collection(MESSAGES).document(time).set(msg)
+
+                // Update last message details in CHATS collection
+                db.collection(CHATS).document(chatId).update(
+                    "lastMessage", message,
+                    "lastMessageTime", formatedTime(time),
+                    "lastMessageId", time,
+                    "lastMessageIndex", msg.index
+                )
+            }.addOnFailureListener { error ->
+                Log.e("Firestore", "Error fetching lastMessageIndex: ", error)
+            }
+        }
+    }
 
 
-
-    fun onSendReply(chatId: String, message: String,userInChat: Boolean = false) {
-        val time = Calendar.getInstance().time.toString()
-        val msg = Message(
-            userData.value?.userId,
-            message,
-            time,
-            userInChat
-        )
-        db.collection(CHATS).document(chatId).collection(MESSAGES).document(time).set(msg)
+    fun formatedTime(time: String): String {
+        return try {
+            val inputFormatter =
+                DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss z yyyy", Locale.ENGLISH)
+            val outputFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH)
+            val parsedDate = LocalDateTime.parse(time, inputFormatter)
+            parsedDate.format(outputFormatter)
+        } catch (e: Exception) {
+            "Invalid Time"
+        }
     }
 
     fun signUp(name: String, number: String, email: String, password: String) {
@@ -171,7 +233,7 @@ class CMViewModel @Inject constructor(
                         if (it.isSuccessful) {
                             signInSuccess.value = true
                             Log.d("TAG", "Success")
-                            createOrUpdateProfile(name, number)
+                            createOrUpdateProfile(name, number, email)
                             updateFCMToken()
                         } else {
                             Log.d("TAG", "Failed")
@@ -241,6 +303,7 @@ class CMViewModel @Inject constructor(
     fun createOrUpdateProfile(
         name: String? = null,
         number: String? = null,
+        email: String? = null,
         lastSeen: String? = null,
         online: Boolean = true,
         imageUrl: String? = null,
@@ -252,6 +315,7 @@ class CMViewModel @Inject constructor(
             userId = uid,
             name = name ?: userData.value?.name,
             number = number ?: userData.value?.number,
+            email = email ?: userData.value?.email,
             online = online,
             lastSeen = lastSeen ?: userData.value?.lastSeen,
             imageUrl = imageUrl ?: userData.value?.imageUrl,
@@ -358,8 +422,13 @@ class CMViewModel @Inject constructor(
                                         number = chatPartner.number,
                                         typing = chatPartner.typing
 
+                                    ),
+                                    lastMessage = "",
+                                    lastMessageTime = "",
+                                    lastMessageId = "",
+                                    lastMessageIndex = 0
+
                                     )
-                                )
                                 db.collection(CHATS).document(id).set(chat)
 //                            eventMutableState.value = Event(
 //                                "Chat Created"
@@ -421,7 +490,8 @@ class CMViewModel @Inject constructor(
                     else
                         currentConnections.add(chat.user1.userId!!)
                 }
-                db.collection(STATUS).whereGreaterThan("timestamp", cutOffTime).whereIn("user.userId", currentConnections)
+                db.collection(STATUS).whereGreaterThan("timestamp", cutOffTime)
+                    .whereIn("user.userId", currentConnections)
                     .addSnapshotListener { value, error ->
                         if (error != null) {
                             handleException(error, "Can't Retrieve Status")
@@ -441,7 +511,7 @@ class CMViewModel @Inject constructor(
             .addOnFailureListener { handleException(it, "Failed to update online status") }
     }
 
-    fun updateTypingStatus(typing: Boolean){
+    fun updateTypingStatus(typing: Boolean) {
         val uid = auth.currentUser?.uid ?: return
         db.collection(USER_NODE).document(uid).update("typing", typing)
             .addOnFailureListener { handleException(it, "Failed to update online status") }
@@ -474,7 +544,14 @@ class CMViewModel @Inject constructor(
                 isUser1Online.value = user?.online ?: false
                 user1LastSeen = user?.lastSeen
                 isUser1Typing.value = user?.typing ?: false
-                chatRef.update("user1.online", isUser1Online.value, "user1.lastSeen", user1LastSeen,"user1.typing", isUser1Typing.value)
+                chatRef.update(
+                    "user1.online",
+                    isUser1Online.value,
+                    "user1.lastSeen",
+                    user1LastSeen,
+                    "user1.typing",
+                    isUser1Typing.value
+                )
                 inProgress.value = false
             }
         }
@@ -487,7 +564,14 @@ class CMViewModel @Inject constructor(
                 isUser2Online.value = user?.online ?: false
                 user2LastSeen = user?.lastSeen
                 isUser2Typing.value = user?.typing ?: false
-                chatRef.update("user2.online", isUser2Online.value, "user2.lastSeen", user2LastSeen,"user2.typing", isUser2Typing.value)
+                chatRef.update(
+                    "user2.online",
+                    isUser2Online.value,
+                    "user2.lastSeen",
+                    user2LastSeen,
+                    "user2.typing",
+                    isUser2Typing.value
+                )
                 inProgress.value = false
             }
         }
@@ -495,23 +579,63 @@ class CMViewModel @Inject constructor(
     }
 
     fun updateMessageStatus(chatId: String, messageId: String, status: MessageStatus) {
-        db.collection(CHATS).document(chatId).collection(MESSAGES).document(messageId).update("status", status)
+        db.collection(CHATS).document(chatId).collection(MESSAGES).document(messageId)
+            .update("status", status)
             .addOnFailureListener {
                 handleException(it, "Failed to update message status")
             }
     }
 
+    fun getLastMessageStatus(chatId: String?, messageId: String?, callback: (String?) -> Unit) {
+        if (chatId.isNullOrEmpty() || messageId.isNullOrEmpty()) {
+            callback(null) // Prevent crash if chatId or messageId is invalid
+            return
+        }
+
+        db.collection(CHATS)
+            .document(chatId)
+            .collection(MESSAGES)
+            .document(messageId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val status = document.getString("status") // Fetch 'status' field
+                    callback(status)
+                } else {
+                    callback(null) // No document found
+                }
+            }
+            .addOnFailureListener { exception ->
+                exception.printStackTrace()
+                callback(null) // Return null in case of error
+            }
+    }
+
+    fun deleteMsg(chatId: String, messageId: String) {
+        val messageRef = db.collection(CHATS).document(chatId).collection(MESSAGES).document(messageId)
+
+        messageRef.get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val messageText = document.getString("message")
+                    if (messageText == "Message Deleted") {
+                        // If already marked as deleted, remove it from Firestore
+                        messageRef.delete()
+                    } else {
+                        // Otherwise, update the message content to "Message Deleted"
+                        messageRef.update("message", "Message Deleted")
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error deleting message", e)
+            }
+    }
 
 
-
-
-
-
-
-
-
-
-
+    fun deleteChat(chatId: String) {
+        db.collection(CHATS).document(chatId).delete()
+    }
 
 
 

@@ -4,6 +4,7 @@ data class UserData(
     var userId: String?="",
     var name: String?="",
     var number: String?="",
+    var email: String?="",
     var online: Boolean=false,
     var lastSeen: String?=null,
     var imageUrl: String?="",
@@ -14,6 +15,7 @@ data class UserData(
         "userId" to userId,
         "name" to name,
         "number" to number,
+        "email" to email,
         "online" to online,
         "lastSeen" to lastSeen,
         "imageUrl" to imageUrl,
@@ -24,7 +26,11 @@ data class UserData(
 data class ChatData(
     val chatId: String?="",
     val user1: ChatUser = ChatUser(),
-    val user2: ChatUser = ChatUser()
+    val user2: ChatUser = ChatUser(),
+    val lastMessage: String?="",
+    val lastMessageTime: String?="",
+    val lastMessageId: String?="",
+    val lastMessageIndex:Int?=0
 )
 
 data class ChatUser(
@@ -40,6 +46,7 @@ data class ChatUser(
 enum class MessageStatus { SENT, DELIVERED, READ }
 
 data class Message(
+    var index: Int? = 0,
     var sendBy: String? = "",
     val message: String? = "",
     val timestamp: String? = "",
