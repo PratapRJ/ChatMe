@@ -13,6 +13,9 @@ ChatMe is a real-time chat application built using **Kotlin** and **Firebase Fir
 - **Modern UI**: Simple and interactive user interface built with Jetpack Compose
 
 ## Screenshots
+| SignUp Screen | Login Screen | Forgot Password |
+|--------------|-----------|--------------|
+| <img src="ScreenShots/SignUpScreenshot.jpg" width="200"> | <img src="ScreenShots/LoginScreenshot.jpg" width="200"> | <img src="ScreenShots/ForgotPasswordScreenshot.jpg" width="200"> |
 
 | ChatList Screen | Profile Screen | Settings |
 |--------------|-----------|--------------|
@@ -41,9 +44,6 @@ ChatMe is a real-time chat application built using **Kotlin** and **Firebase Fir
    - Download and add the `google-services.json` file to the `app/` directory.
    - Enable Firestore Database.
 4. **Run the app on an emulator or physical device**
-
-## Screenshots
-(Screenshots here)
 
 ## Future Improvements
 - Add support for multimedia messages (images, videos, etc.).
