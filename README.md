@@ -14,11 +14,11 @@ ChatMe is a real-time chat application built using **Kotlin** and **Firebase Fir
 
 ## Screenshots
 
-| Login Screen | Chat List | Conversation |
+| ChatList Screen | Profile Screen | Settings |
 |--------------|-----------|--------------|
 | <img src="ScreenShots/screenshot1.jpg" width="200"> | <img src="ScreenShots/screenshot2.jpg" width="200"> | <img src="ScreenShots/screenshot3.jpg" width="200"> |
 
-| Message Options | User Profile |
+| Status Screen | Chat Screen |
 |-----------------|--------------|
 | <img src="ScreenShots/screenshot4.jpg" width="200"> | <img src="ScreenShots/screenshot5.jpg" width="200"> |
 
