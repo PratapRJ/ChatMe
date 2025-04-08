@@ -1,19 +1,33 @@
 # ChatMe
 
+![ChatMe Banner](ScreenShots/banner_photo.png)  
+
 ## Overview
 ChatMe is a real-time chat application built using **Kotlin** and **Firebase Firestore Realtime Database**. It provides a seamless and responsive chat experience with a modern UI. The app allows users to send and receive messages in real time.
 
 ## Features
-- **Real-time Messaging**: Send and receive messages instantly using Firestore.
-- **User Authentication**: Secure login and registration.
-- **Chat Interface**: Messages are displayed in a structured and user-friendly manner.
-- **Firestore Database**: Stores messages efficiently.
-- **Modern UI**: Simple and interactive user interface.
+- **Real-time Messaging**: Send and receive messages instantly using Firestore
+- **User Authentication**: Secure login and registration
+- **Chat Interface**: Messages are displayed in a structured and user-friendly manner
+- **Firestore Database**: Stores messages efficiently
+- **Modern UI**: Simple and interactive user interface built with Jetpack Compose
+
+## Screenshots
+
+| Login Screen | Chat List | Conversation |
+|--------------|-----------|--------------|
+| <img src="ScreenShots/screenshot1.jpg" width="200"> | <img src="ScreenShots/screenshot2.jpg" width="200"> | <img src="ScreenShots/screenshot3.jpg" width="200"> |
+
+| Message Options | User Profile |
+|-----------------|--------------|
+| <img src="ScreenShots/screenshot4.jpg" width="200"> | <img src="ScreenShots/screenshot5.jpg" width="200"> |
+
 
 ## Technologies Used
 - **Android Studio** (Kotlin + Jetpack Compose)
 - **Firebase Firestore** (for real-time database)
-- **Firebase Authentication** (optional for user login)
+- **Firebase Authentication** (for user login)
+- **Material Design 3** (for modern UI components)
 
 ## Installation
 1. **Clone the repository**
