@@ -1,5 +1,7 @@
 package com.prj.chatme
 
+
+import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -7,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationCompat
 import androidx.core.text.isDigitsOnly
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,6 +39,7 @@ import com.prj.chatme.data.Status
 import com.prj.chatme.data.USER_NODE
 import com.prj.chatme.data.UserData
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -49,6 +53,28 @@ import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.prj.chatme.data.SupportMessage
+import com.prj.chatme.help_and_support_screens.FAQ
+import com.prj.chatme.settings_screens.HelpAndSupportScreen
+import com.prj.chatme.ui.theme.ChatMeColors
+import com.prj.chatme.ui.theme.ChatMeTheme
+
 @HiltViewModel
 class CMViewModel @Inject constructor(
     val auth: FirebaseAuth,
@@ -56,6 +82,7 @@ class CMViewModel @Inject constructor(
     val storage: FirebaseStorage,
     val cloudMessaging: FirebaseMessaging
 ) : ViewModel() {
+
     var inProgress = mutableStateOf(false)
     val eventMutableState = mutableStateOf<Event<String>?>(null)
     var signInSuccess = mutableStateOf(false)
@@ -84,6 +111,10 @@ class CMViewModel @Inject constructor(
     var ReadButtonClicked by  mutableStateOf(false)
     var UnreadButtonClicked by  mutableStateOf(false)
 
+    var chatIdToNavigate by  mutableStateOf<String?>(null)
+
+    var prevDate by mutableStateOf<String?>(null)
+
 
     init {
         val currentUser = auth.currentUser
@@ -96,16 +127,46 @@ class CMViewModel @Inject constructor(
 
 
 
-    fun fetchMessageStatuses(chats : List<ChatData>) {
+    fun fetchMessageStatuses(chats: List<ChatData>) {
         viewModelScope.launch {
             val statuses = mutableMapOf<String, String>()
             chats.forEach { chat ->
                 getLastMessageStatus(chat.chatId, chat.lastMessageId) { status ->
-                    statuses[chat.chatId ?: ""] = status ?: ""
+                    status?.let {
+                        statuses[chat.chatId ?: ""] = it
+                    } ?: run {
+                        statuses[chat.chatId ?: ""] = "UNKNOWN"
+                    }
                 }
             }
+            // Add delay to ensure all callbacks complete
+            delay(500)
             _messageStatuses.value = statuses
         }
+    }
+
+    fun setFilter(filterType: FilterType) {
+        when(filterType) {
+            FilterType.ALL -> {
+                AllButtonClicked = true
+                ReadButtonClicked = false
+                UnreadButtonClicked = false
+            }
+            FilterType.READ -> {
+                AllButtonClicked = false
+                ReadButtonClicked = true
+                UnreadButtonClicked = false
+            }
+            FilterType.UNREAD -> {
+                AllButtonClicked = false
+                ReadButtonClicked = false
+                UnreadButtonClicked = true
+            }
+        }
+    }
+
+    enum class FilterType {
+        ALL, READ, UNREAD
     }
 
     fun login(email: String, password: String) {
@@ -176,7 +237,9 @@ class CMViewModel @Inject constructor(
 
 
     fun onSendReply(chatId: String, message: String, userInChat: Boolean = false) {
+        inProgress.value = true
         if (message.isNotEmpty()) {
+
             val time = Calendar.getInstance().time.toString()
 
             // Fetch lastMessageIndex asynchronously
@@ -201,8 +264,10 @@ class CMViewModel @Inject constructor(
                     "lastMessageId", time,
                     "lastMessageIndex", msg.index
                 )
+                inProgress.value = false
             }.addOnFailureListener { error ->
                 Log.e("Firestore", "Error fetching lastMessageIndex: ", error)
+                inProgress.value = false
             }
         }
     }
@@ -307,7 +372,8 @@ class CMViewModel @Inject constructor(
         lastSeen: String? = null,
         online: Boolean = true,
         imageUrl: String? = null,
-        typing: Boolean = false
+        typing: Boolean = false,
+        bio: String? = null
     ) {
         var uid = auth.currentUser?.uid
 
@@ -319,7 +385,8 @@ class CMViewModel @Inject constructor(
             online = online,
             lastSeen = lastSeen ?: userData.value?.lastSeen,
             imageUrl = imageUrl ?: userData.value?.imageUrl,
-            typing = typing
+            typing = typing,
+            bio = bio ?: userData.value?.bio
 
         )
         uid?.let {
@@ -454,6 +521,7 @@ class CMViewModel @Inject constructor(
     }
 
     fun createStatus(imageUrl: String) {
+        val timestamp = System.currentTimeMillis()
         val newStatus = Status(
             user = ChatUser(
                 userId = userData.value?.userId,
@@ -462,9 +530,9 @@ class CMViewModel @Inject constructor(
                 number = userData.value?.number
             ),
             imageUrl = imageUrl,
-            timestamp = System.currentTimeMillis()
+            timestamp = timestamp
         )
-        db.collection(STATUS).document().set(newStatus)
+        db.collection(STATUS).document(timestamp.toString()).set(newStatus)
     }
 
     fun populateStatuses() {
@@ -637,6 +705,148 @@ class CMViewModel @Inject constructor(
         db.collection(CHATS).document(chatId).delete()
     }
 
+    fun deleteStatus(statusId: String) {
+        db.collection(STATUS).document(statusId).delete()
+
+    }
+
+    //Notification Settings Methods Starts:
+
+    fun getCurrentNotificationSettings(context: Context): NotificationSettings {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                    as NotificationManager
+            val channel = manager.getNotificationChannel("chatme_messages")
+
+            return NotificationSettings(
+                enabled = channel?.importance != NotificationManager.IMPORTANCE_NONE,
+                showPreview = channel?.lockscreenVisibility == Notification.VISIBILITY_PUBLIC,
+                soundEnabled = channel?.sound != null,
+                vibrationEnabled = channel?.shouldVibrate() == true
+            )
+        }
+        return NotificationSettings() // Default values
+    }
+
+    data class NotificationSettings(
+        val enabled: Boolean = true,
+        val showPreview: Boolean = true,
+        val soundEnabled: Boolean = true,
+        val vibrationEnabled: Boolean = false
+    )
+
+    fun updateNotificationSettings(
+        context: Context,
+        notificationsEnabled: Boolean,
+        showPreview: Boolean,
+        soundEnabled: Boolean,
+        vibrationEnabled: Boolean
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                    as NotificationManager
+
+            val channelId = "chatme_messages"
+            val channelName = "Chat Messages"
+            val importance = if (notificationsEnabled) {
+                NotificationManager.IMPORTANCE_HIGH
+            } else {
+                NotificationManager.IMPORTANCE_HIGH
+            }
+
+            val channel = NotificationChannel(
+                channelId,
+                channelName,
+                importance
+            ).apply {
+                setShowBadge(true)
+                lockscreenVisibility = if (showPreview) {
+                    Notification.VISIBILITY_PUBLIC  // Correct constant here
+                } else {
+                    Notification.VISIBILITY_PRIVATE
+                }
+
+                if (soundEnabled) {
+                    setSound(Settings.System.DEFAULT_NOTIFICATION_URI, null)
+                } else {
+                    setSound(null, null)
+                }
+
+                if (vibrationEnabled) {
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 100, 200, 300)
+                } else {
+                    enableVibration(false)
+                }
+            }
+
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+
+    fun openEmailClient(email: String,context: Context) {
+        try {
+
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:")
+                putExtra(Intent.EXTRA_EMAIL, arrayOf(email))
+                putExtra(Intent.EXTRA_SUBJECT, "Regarding ChatMe App")
+            }
+            context.startActivity(Intent.createChooser(intent, "Send email using..."))
+        } catch (e: ActivityNotFoundException) {
+            // Handle case where no email client is installed
+            Toast.makeText(
+                context,
+                "No email client installed",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    //Here Help and Support Screen Methods :
+    private val _faqs = mutableStateListOf<FAQ>()
+    val faqs: List<FAQ> = _faqs
+
+    val supportMessages: MutableState<List<SupportMessage>> = mutableStateOf(emptyList())
+
+    fun fetchFAQs() {
+        viewModelScope.launch {
+            // Call your API or database to get FAQs
+            // Then update _faqs
+        }
+    }
+
+    fun sendSupportMessage(messageText: String, function: () -> Unit) {
+
+    }
+
+    //Forgot Password Method Here
+    // In your CMViewModel class
+    val passwordResetSuccess = mutableStateOf(false)
+    val errorMessage = mutableStateOf("")
+
+    fun sendPasswordResetEmail(email: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                auth.sendPasswordResetEmail(email)
+                    .addOnCompleteListener { task ->
+
+                        passwordResetSuccess.value = true
+
+                        if (!task.isSuccessful) {
+                            errorMessage.value = task.exception?.message ?: "Unknown error occurred"
+
+                        }
+                        onComplete()
+                    }
+            } catch (e: Exception) {
+                errorMessage.value = e.message ?: "Unknown error occurred"
+                passwordResetSuccess.value = false
+                onComplete()
+            }
+        }
+    }
 
 
 }

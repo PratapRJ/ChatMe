@@ -9,7 +9,8 @@ data class UserData(
     var lastSeen: String?=null,
     var imageUrl: String?="",
     var typing: Boolean = false,
-    var fcmToken: String? = ""
+    var fcmToken: String? = "",
+    var bio : String? = ""
 ){
     fun toMap() = mapOf(
         "userId" to userId,
@@ -19,9 +20,20 @@ data class UserData(
         "online" to online,
         "lastSeen" to lastSeen,
         "imageUrl" to imageUrl,
-        "typing" to typing
+        "typing" to typing,
+        "bio" to bio
     )
 }
+
+data class SupportMessage(
+    val question: String? = "",
+    val answer: String? = "",
+    val senderId: String? = "",
+    val senderName: String? = "",
+    val senderImageUrl: String? = "",
+    val timestamp: Long? = null,
+    val text: String? = ""
+)
 
 data class ChatData(
     val chatId: String?="",

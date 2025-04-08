@@ -1,396 +1,667 @@
 package com.prj.chatme.screens
 
-import android.util.Log
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.prj.chatme.CommonProgressBar
-import com.prj.chatme.CommonRow
+import coil.compose.AsyncImage
 import com.prj.chatme.DestinatinScreen
 import com.prj.chatme.CMViewModel
-import com.prj.chatme.CommonAlertDialog
 import com.prj.chatme.R
-import com.prj.chatme.TextFieldWithIcons
-import com.prj.chatme.TitleText
-import com.prj.chatme.UserInfoRow
+import com.prj.chatme.data.ChatData
+import com.prj.chatme.data.ChatUser
+import com.prj.chatme.data.UserData
 import com.prj.chatme.navigateTo
-import com.prj.chatme.ui.theme.DarkGreen
-import com.prj.chatme.ui.theme.DarkOrange
-import com.prj.chatme.ui.theme.LightOrange
-import com.prj.chatme.ui.theme.chatListBackgroundColor
+import com.prj.chatme.ui.theme.ChatMeColors
+import com.prj.chatme.ui.theme.ChatMeShapes
+import com.prj.chatme.ui.theme.ChatMeTheme
+import com.prj.chatme.ui.theme.ChatMeTypography
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 fun ChatListScreen(
     navController: NavController,
     vm: CMViewModel
 ) {
-    val inProgress = vm.inProgressChats.value
-    if (inProgress) {
-        CommonProgressBar()
-    } else {
+    ChatMeTheme {
+        val inProgress = vm.inProgressChats.value
         val chats = vm.chats.value
         val userData = vm.userData.value
-        val showDialog = remember {
-            mutableStateOf(false)
-        }
-        val onFabClicked: () -> Unit = { showDialog.value = true }
-        val onDismiss: () -> Unit = { showDialog.value = false }
-        val onAddChat: (String) -> Unit = {
-            showDialog.value = false
-            vm.onAddChat(it)
-        }
 
+        if (inProgress) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ChatMeColors.lightPrimary)
+            }
+        } else {
+            var searchValue by rememberSaveable { mutableStateOf("") }
+            var showAddChatDialog by rememberSaveable { mutableStateOf(false) }
 
-        var searchValue by rememberSaveable {
-            mutableStateOf("")
-        }
-
-        // 🔹 Filtered chats based on search query
-        val filteredChats by remember {
-            derivedStateOf {
-                if (searchValue.isBlank()) chats // Show all chats if search is empty
-                else chats.filter { chat ->
-                    val chatUser =
-                        if (chat.user1.userId == userData?.userId) chat.user2 else chat.user1
-                    chatUser.name!!.contains(
-                        searchValue,
-                        ignoreCase = true
-                    ) // Case-insensitive search
+            val filteredChats = remember(searchValue, chats) {
+                if (searchValue.isBlank()) chats else {
+                    chats.filter { chat ->
+                        val chatUser = if (chat.user1.userId == userData?.userId) chat.user2 else chat.user1
+                        chatUser.name?.contains(searchValue, ignoreCase = true) ?: false
+                    }
                 }
             }
+
+            Scaffold(
+                topBar = { ChatListTopBar(navController) },
+                floatingActionButton = {
+                    AddChatFAB(
+                        onClick = { showAddChatDialog = true }
+                    )
+                },
+                content = { padding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .background(ChatMeColors.lightBackground)
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Search Bar
+                            SearchBar(
+                                value = searchValue,
+                                onValueChange = { searchValue = it },
+                                modifier = Modifier.padding(16.dp)
+                            )
+
+                            // Filter Chips
+                            FilterChipsRow(
+                                vm = vm,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+
+                            // Chat List
+                            when {
+                                chats.isEmpty() -> EmptyChatListPlaceholder()
+                                filteredChats.isEmpty() -> NoResultsPlaceholder()
+                                else -> ChatList(
+                                    chats = filteredChats,
+                                    userData = userData,
+                                    vm = vm,
+                                    navController = navController,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        // Add Chat Dialog
+                        if (showAddChatDialog) {
+                            AddChatDialog(
+                                onDismiss = { showAddChatDialog = false },
+                                onAddChat = { number ->
+                                    showAddChatDialog = false
+                                    vm.onAddChat(number)
+                                }
+                            )
+                        }
+                    }
+                },
+                bottomBar = {
+                    BottomNavigationMenu(
+                        selectedItem = BottomNavigationItem.CHATLIST,
+                        navController = navController
+                    )
+                }
+            )
         }
+    }
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatListTopBar(navController: NavController) {
+    CenterAlignedTopAppBar(
+        title = {
+            Text(
+                text = "Chats",
+                style = ChatMeTypography.headlineSmall,
+                color = ChatMeColors.darkPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = { /* Handle menu */ }) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menu",
+                    tint = ChatMeColors.darkPrimaryContainer
+                )
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = { navigateTo(navController, DestinatinScreen.Settings.route) }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings"
+                )
+            }
+        },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = ChatMeColors.lightPrimaryContainer,
+            titleContentColor = ChatMeColors.darkPrimaryContainer,
+            actionIconContentColor = ChatMeColors.darkPrimaryContainer
+        )
+    )
+}
 
-
-        Scaffold(
-            floatingActionButton = {
-                FAB(
-                    showDialog = showDialog.value,
-                    onFabClicked = onFabClicked,
-                    onDismiss = onDismiss,
-                    onAddChat = onAddChat
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = ChatMeColors.lightPrimary
+            )
+        },
+        placeholder = {
+            Text(
+                text = "Search chats...",
+                color = ChatMeColors.lightOnSurface.copy(alpha = 0.6f)
+            )
+        },
+        singleLine = true,
+        shape = ChatMeShapes.medium,
+        colors = TextFieldDefaults.outlinedTextFieldColors(
+            focusedTextColor = ChatMeColors.lightOnSurface,
+            unfocusedTextColor = ChatMeColors.lightOnSurface,
+            focusedPlaceholderColor = ChatMeColors.lightOnSurface.copy(alpha = 0.6f),
+            unfocusedPlaceholderColor = ChatMeColors.lightOnSurface.copy(alpha = 0.6f),
+            focusedLeadingIconColor = ChatMeColors.lightPrimary,
+            unfocusedLeadingIconColor = ChatMeColors.lightPrimary,
+            focusedBorderColor = ChatMeColors.lightPrimary,
+            unfocusedBorderColor = ChatMeColors.divider,
+        ),
+        modifier = modifier.fillMaxWidth()
+    )
+}
+@Composable
+private fun FilterChipsRow(
+    vm: CMViewModel,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+    ) {
+        FilterChip(
+            selected = vm.AllButtonClicked,
+            onClick = { vm.setFilter(CMViewModel.FilterType.ALL) },
+            label = {
+                Text(
+                    text = "All",
+                    style = ChatMeTypography.labelLarge
                 )
             },
-            content = {
-                Column(
-                    modifier = Modifier
-                        .padding(it)
-                        .background(chatListBackgroundColor)
-                        .fillMaxSize()
-                ) {
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = ChatMeColors.lightPrimaryContainer,
+                selectedLabelColor = ChatMeColors.darkPrimaryContainer,
+                containerColor = ChatMeColors.lightSurface,
+                labelColor = ChatMeColors.lightOnSurface
+            ),
+            modifier = Modifier.padding(end = 8.dp)
+        )
 
-                    TitleText(text = "Chats", color = DarkOrange)
+        FilterChip(
+            selected = vm.ReadButtonClicked,
+            onClick = { vm.setFilter(CMViewModel.FilterType.READ) },
+            label = {
+                Text(
+                    text = "Read",
+                    style = ChatMeTypography.labelLarge
+                )
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = ChatMeColors.lightPrimaryContainer,
+                selectedLabelColor = ChatMeColors.darkPrimaryContainer,
+                containerColor = ChatMeColors.lightSurface,
+                labelColor = ChatMeColors.lightOnSurface
+            ),
+            modifier = Modifier.padding(end = 8.dp)
+        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-
-                    if (chats.isEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(text = "No Chats Available")
-                        }
-                    } else {
-                        LaunchedEffect(Unit) {
-                            vm.fetchMessageStatuses(chats)
-                        }
-
-                        LazyColumn(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            // ✅ Make the button row scrollable inside LazyColumn
-                            item {
-                                TextFieldWithIcons(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight()
-
-                                        .padding(start = 16.dp, end = 16.dp)
-                                        .background(
-                                            Color.White,
-                                            shape = RoundedCornerShape(80.dp)
-                                        ) // Apply white background and rounded corners
-                                        .clip(RoundedCornerShape(80.dp)), // Clip to match the shape,
-                                    icon = Icons.Default.Search,
-                                    value = searchValue,
-                                    label = "",
-                                    placeholder = "Search",
-                                    contentDescription = "Search",
-                                    containerColor = Color.Transparent,
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent
-                                ) {
-                                    searchValue = it
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-                            if (filteredChats.isEmpty()) {
-                                item {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxSize(),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Text(text = "No Chats Available")
-                                    }
-                                }
-                            } else {
-                                item {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .wrapContentHeight()
-                                            .background(Color.Transparent),
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                vm.AllButtonClicked = true
-                                                vm.ReadButtonClicked = false
-                                                vm.UnreadButtonClicked = false
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (vm.AllButtonClicked) DarkOrange else Color.Transparent,
-                                                contentColor = if (vm.AllButtonClicked) Color.White else Color.Black
-                                            ),
-                                            border = BorderStroke(2.dp, DarkOrange),
-                                            modifier = Modifier
-                                                .padding(start = 16.dp)
-                                                .height(35.dp)
-                                                .align(Alignment.CenterVertically)
-                                        ) {
-                                            Text(text = "All")
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                vm.AllButtonClicked = false
-                                                vm.ReadButtonClicked = true
-                                                vm.UnreadButtonClicked = false
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (vm.ReadButtonClicked) DarkOrange else Color.Transparent,
-                                                contentColor = if (vm.ReadButtonClicked) Color.White else Color.Black
-                                            ),
-                                            border = BorderStroke(2.dp, DarkOrange),
-                                            modifier = Modifier
-                                                .padding(start = 8.dp)
-                                                .height(35.dp)
-                                                .align(Alignment.CenterVertically)
-                                        ) {
-                                            Text(text = "Read")
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                vm.AllButtonClicked = false
-                                                vm.ReadButtonClicked = false
-                                                vm.UnreadButtonClicked = true
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (vm.UnreadButtonClicked) DarkOrange else Color.Transparent,
-                                                contentColor = if (vm.UnreadButtonClicked) Color.White else Color.Black
-                                            ),
-                                            border = BorderStroke(2.dp, DarkOrange),
-                                            modifier = Modifier
-                                                .padding(start = 8.dp)
-                                                .height(35.dp)
-                                                .align(Alignment.CenterVertically)
-                                        ) {
-                                            Text(text = "Unread")
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(20.dp)) // Add spacing below buttons
-                                }
-
-                                items(filteredChats, key = { it.chatId.toString() }) { chat ->
-                                    val chatUser =
-                                        if (chat.user1.userId == userData?.userId) chat.user2 else chat.user1
-                                    val status =
-                                        vm.messageStatuses.collectAsState().value[chat.chatId]
-                                            ?: "UNKNOWN"
-
-                                    val addOrNot = when {
-                                        vm.ReadButtonClicked -> status == "READ"
-                                        vm.UnreadButtonClicked -> status == "SENT"
-                                        else -> true
-                                    }
-
-                                    val showDialog = remember { mutableStateOf(false) }
-
-                                    if (addOrNot) {
-                                        UserInfoRow(
-                                            imageUrl = chatUser.imageUrl,
-                                            name = chatUser.name.toString(),
-                                            lastMessage = chat.lastMessage.toString(),
-                                            lastMessageTime = chat.lastMessageTime.toString(),
-                                            onLongPress = {
-                                                showDialog.value = true // ✅ Now it works!
-                                            },
-                                            onItemClick =
-                                            {
-                                                chat.chatId?.let {
-                                                    navigateTo(
-                                                        navController,
-                                                        DestinatinScreen.Chat.createRoute(chatId = it)
-                                                    )
-                                                }
-                                            })
-
-
-                                        // ✅ Show delete dialog properly
-                                        if (showDialog.value) {
-                                            CommonAlertDialog(
-                                                message = "Do you want to delete this chat?",
-                                                showDialog = showDialog,
-                                                onSuccess = {
-                                                    showDialog.value = false
-                                                    vm.deleteChat(chat.chatId.toString())
-
-                                                },
-                                                onDismiss = {
-                                                    showDialog.value = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-
-                            }
-                        }
-
-
-                    }
-                    BottomNavigationMenu(BottomNavigationItem.CHATLIST, navController)
-                }
-            })
+        FilterChip(
+            selected = vm.UnreadButtonClicked,
+            onClick = { vm.setFilter(CMViewModel.FilterType.UNREAD) },
+            label = {
+                Text(
+                    text = "Unread",
+                    style = ChatMeTypography.labelLarge
+                )
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = ChatMeColors.lightPrimaryContainer,
+                selectedLabelColor = ChatMeColors.darkPrimaryContainer,
+                containerColor = ChatMeColors.lightSurface,
+                labelColor = ChatMeColors.lightOnSurface
+            )
+        )
     }
-
-
 }
 
 @Composable
-fun FAB(
-    showDialog: Boolean,
-    onFabClicked: () -> Unit,
-    onDismiss: () -> Unit,
-    onAddChat: (String) -> Unit
+private fun ChatList(
+    chats: List<ChatData>,
+    userData: UserData?,
+    vm: CMViewModel,
+    navController: NavController,
+    modifier: Modifier = Modifier
 ) {
-    val addChatNumber = remember {
-        mutableStateOf("")
+    // Collect the message statuses as state
+    val messageStatuses by vm.messageStatuses.collectAsState()
+
+    // Fetch statuses when chats change
+    LaunchedEffect(chats) {
+        vm.fetchMessageStatuses(chats)
     }
-    val onNumberChanged: (String) -> Unit = {
-        addChatNumber.value = it
+
+    // Filter chats based on selected filter
+    val filteredChats = remember(chats, vm.AllButtonClicked, vm.ReadButtonClicked, vm.UnreadButtonClicked, messageStatuses) {
+        when {
+            vm.AllButtonClicked -> chats
+            vm.ReadButtonClicked -> chats.filter { chat ->
+                messageStatuses[chat.chatId ?: ""] == "READ"
+            }
+            vm.UnreadButtonClicked -> chats.filter { chat ->
+                messageStatuses[chat.chatId ?: ""] == "SENT"
+            }
+            else -> chats
+        }
     }
-    if (showDialog) {
-        AlertDialog(onDismissRequest = {
-            onDismiss.invoke()
-        },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onAddChat(addChatNumber.value)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkOrange,
-                        contentColor = Color.White,
-                        disabledContainerColor = Color.Gray,
-                        disabledContentColor = Color.White
-                    )
-                ) {
-                    Text(text = "Add Chat")
-                }
+
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        items(filteredChats, key = { it.chatId.toString() }) { chat ->
+            val chatUser = if (chat.user1.userId == userData?.userId) chat.user2 else chat.user1
+            val status = messageStatuses[chat.chatId ?: ""] ?: "UNKNOWN"
+
+            var showDeleteDialog by remember { mutableStateOf(false) }
+
+            ChatListItem(
+                chat = chat,
+                chatUser = chatUser,
+                status = status,
+                onItemClick = {
+                    chat.chatId?.let {
+                        navigateTo(navController, DestinatinScreen.Chat.createRoute(it))
+                    }
+                },
+                onLongPress = { showDeleteDialog = true }
+            )
+
+            if (showDeleteDialog) {
+                DeleteChatDialog(
+                    onDismiss = { showDeleteDialog = false },
+                    onConfirm = {
+                        showDeleteDialog = false
+                        vm.deleteChat(chat.chatId.toString())
+                    }
+                )
+            }
+        }
+    }
+}
+@Composable
+private fun ChatListItem(
+    chat: ChatData,
+    chatUser: ChatUser,
+    status: String,
+    onItemClick: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { onLongPress() },
+                    onTap = { onItemClick() }
+                )
             },
-            title = { Text(text = "Add Chat") },
-            text = {
-                TextFieldWithIcons(
-                    icon = Icons.Default.Call,
-                    label = "Phone Number",
-                    value = addChatNumber.value,
-                    placeholder = "Enter your phone number",
-                    contentDescription = "Phone Number",
-                    onValueChange = { onNumberChanged(it) }
+        shape = ChatMeShapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = ChatMeColors.lightSurface,
+            contentColor = ChatMeColors.lightOnSurface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Profile Image
+            AsyncImage(
+                model = chatUser.imageUrl,
+                contentDescription = "Profile image",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.user),
+                error = painterResource(R.drawable.user)
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Chat Info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = chatUser.name ?: "Unknown",
+                    style = ChatMeTypography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = ChatMeColors.lightOnSurface
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = chat.lastMessage ?: "",
+                    style = ChatMeTypography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = ChatMeColors.lightOnSurface.copy(alpha = 0.8f)
                 )
             }
 
-        )
-    }
-    FloatingActionButton(
-        onClick = { onFabClicked.invoke() },
-        containerColor = DarkOrange,
-        shape = CircleShape,
-        modifier = Modifier.padding(bottom = 40.dp),
+            // Time and Status
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = chat.lastMessageTime ?: "",
+                    style = ChatMeTypography.labelSmall,
+                    color = ChatMeColors.lightOnSurface.copy(alpha = 0.6f)
+                )
 
-        ) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(
+                            color = when (status) {
+                                "READ" -> ChatMeColors.success
+                                "SENT" -> ChatMeColors.divider
+                                else -> Color.Transparent
+                            },
+                            shape = CircleShape
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddChatFAB(
+    onClick: () -> Unit
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = ChatMeColors.lightPrimary,
+        contentColor = ChatMeColors.lightOnPrimary,
+        shape = CircleShape,
+        modifier = Modifier.padding(bottom = 72.dp)
+    ) {
         Icon(
             imageVector = Icons.Rounded.Add,
-            contentDescription = "Add Chat",
-            tint = Color.White
+            contentDescription = "Add chat"
         )
     }
+}
 
+@Composable
+private fun AddChatDialog(
+    onDismiss: () -> Unit,
+    onAddChat: (String) -> Unit
+) {
+    var phoneNumber by rememberSaveable { mutableStateOf("") }
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Add New Chat",
+                style = ChatMeTypography.titleLarge,
+                color = ChatMeColors.lightOnSurface
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Phone Number") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Call,
+                        contentDescription = "Phone",
+                        tint = ChatMeColors.lightPrimary
+                    )
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = ChatMeColors.lightSurface,
+                    unfocusedContainerColor = ChatMeColors.lightSurface,
+                    focusedTextColor = ChatMeColors.lightOnSurface,
+                    unfocusedTextColor = ChatMeColors.lightOnSurface,
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onAddChat(phoneNumber) },
+                enabled = phoneNumber.isNotBlank(),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.lightPrimary
+                )
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.lightOnSurface
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        containerColor = ChatMeColors.lightSurface,
+        titleContentColor = ChatMeColors.lightOnSurface,
+        textContentColor = ChatMeColors.lightOnSurface
+    )
+}
+
+@Composable
+private fun DeleteChatDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete",
+                tint = ChatMeColors.darkRed
+            )
+        },
+        title = {
+            Text(
+                text = "Delete Chat",
+                style = ChatMeTypography.titleLarge,
+                color = ChatMeColors.lightOnSurface
+            )
+        },
+        text = {
+            Text(
+                text = "Are you sure you want to delete this chat?",
+                color = ChatMeColors.lightOnSurface.copy(alpha = 0.8f)
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.darkRed
+                )
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.lightOnSurface
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        containerColor = ChatMeColors.lightSurface,
+        titleContentColor = ChatMeColors.lightOnSurface,
+        textContentColor = ChatMeColors.lightOnSurface
+    )
+}
+
+@Composable
+private fun EmptyChatListPlaceholder() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_empty_chat),
+                contentDescription = "No chats",
+                modifier = Modifier.size(64.dp),
+                tint = ChatMeColors.lightPrimary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No chats yet",
+                style = ChatMeTypography.titleMedium,
+                color = ChatMeColors.lightOnSurface
+            )
+            Text(
+                text = "Tap the + button to start a new chat",
+                style = ChatMeTypography.bodyMedium,
+                color = ChatMeColors.lightOnSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoResultsPlaceholder() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.chat),
+                contentDescription = "No results",
+                modifier = Modifier.size(64.dp),
+                tint = ChatMeColors.lightPrimary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No matching chats found",
+                style = ChatMeTypography.titleMedium,
+                color = ChatMeColors.lightOnSurface
+            )
+        }
+    }
 }

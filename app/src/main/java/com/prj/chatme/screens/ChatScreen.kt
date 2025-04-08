@@ -84,101 +84,155 @@ import com.prj.chatme.data.MessageStatus
 import com.prj.chatme.data.UserData
 import com.prj.chatme.ui.theme.DarkGreen
 import com.prj.chatme.ui.theme.DarkOrange
-import com.prj.chatme.ui.theme.Green
-import com.prj.chatme.ui.theme.sendMessageBgColor
+//import com.prj.chatme.ui.theme.Green
+//import com.prj.chatme.ui.theme.sendMessageBgColor
 import java.time.LocalDate
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color.Companion.Green
 import kotlinx.coroutines.delay
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
+import androidx.compose.material3.Scaffold
+import com.prj.chatme.ui.theme.ChatMeColors
+import com.prj.chatme.ui.theme.ChatMeShapes
+import com.prj.chatme.ui.theme.ChatMeTheme // ✅ import your theme
+import com.prj.chatme.ui.theme.ChatMeTypography
+import com.prj.chatme.ui.theme.sentMessageBackgroundColor
+
 @Composable
 fun ChatScreen(navController: NavController, vm: CMViewModel, chatId: String) {
-    var reply by rememberSaveable {
-        mutableStateOf("")
-    }
-    val myUser = vm.userData.value
-    val currentChat = vm.chats.value.first { it.chatId == chatId }
-    val chatUser =
-        if (currentChat.user1.userId == myUser?.userId) currentChat.user2 else currentChat.user1
-    val onSendReply = {
-        vm.onSendReply(chatId, reply, chatUser.online)
-        reply = ""
-    }
-    val chatMessage = vm.chatMessages.value
-    val focusManager = LocalFocusManager.current
-
-    LaunchedEffect(key1 = Unit) {
-        vm.pupulateMessages(chatId)
-        vm.updateChatUserStatus(chatId)
-    }
-    BackHandler {
-        vm.dePopulateMessages()
-        navController.popBackStack()
-    }
-
-
-    Column(
-        modifier = Modifier.clickable {
-            focusManager.clearFocus()
-        }
-    ) {
-        ChatHeader(
-            name = chatUser.name ?: "",
-            imageUrl = chatUser.imageUrl ?: "",
-            chatUser.online,
-            chatUser.lastSeen.toString()
-        ) {
-            navController.popBackStack()
-            vm.dePopulateMessages()
-
-        }
-
-        Box(Modifier.weight(1f)) {
-            Image(
-                painter = painterResource(id = R.drawable.chat_wallpaper),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-            MessageBox(
-                chatMessages = chatMessage,
-                chatUser = chatUser,
-                currentUserId = myUser?.userId ?: "",
-                vm = vm,
-                chatId = chatId
-            )
-            if (chatUser.typing) {
-                Text(
-                    text = "Typing...",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    modifier = Modifier
-                        .padding(start = 16.dp, top = 4.dp)
-                        .align(Alignment.BottomStart)
-                )
+    ChatMeTheme { // ✅ apply custom app theme
+        Scaffold { innerPadding -> // ✅ wrap inside scaffold
+            var reply by rememberSaveable {
+                mutableStateOf("")
             }
-            ReplyBox(
+            val myUser = vm.userData.value
+            val currentChat = vm.chats.value.first { it.chatId == chatId }
+            val chatUser =
+                if (currentChat.user1.userId == myUser?.userId) currentChat.user2 else currentChat.user1
+            val onSendReply = {
+                vm.onSendReply(chatId, reply, chatUser.online)
+                reply = ""
+            }
+            val chatMessage = vm.chatMessages.value
+            val focusManager = LocalFocusManager.current
+
+            LaunchedEffect(key1 = Unit) {
+                vm.pupulateMessages(chatId)
+                vm.updateChatUserStatus(chatId)
+            }
+            BackHandler {
+                vm.prevDate = null
+                vm.dePopulateMessages()
+                navController.popBackStack()
+            }
+
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-                    .align(Alignment.BottomCenter),
-                reply = reply,
-                onReplyChange = { reply = it },
-                onSendReply = onSendReply,
-                vm = vm,
-                chatId = chatId,
-                focusManager = focusManager
+                    .clickable { focusManager.clearFocus() }
+                    .padding(innerPadding) // ✅ respect scaffold insets
+            ) {
+                ChatHeader(
+                    name = chatUser.name ?: "",
+                    imageUrl = chatUser.imageUrl ?: "",
+                    chatUser.online,
+                    chatUser.lastSeen.toString()
+                ) {
+                    navController.popBackStack()
+                    vm.dePopulateMessages()
+                }
+
+                Box(Modifier.weight(1f)
+                    .clickable{
+                        focusManager.clearFocus()
+                    }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.chat_wallpaper),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize()
+                    )
+                    Column(verticalArrangement = Arrangement.SpaceBetween) {
+                        Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            MessageBox(
+                                chatMessages = chatMessage,
+                                chatUser = chatUser,
+                                currentUserId = myUser?.userId ?: "",
+                                vm = vm,
+                                chatId = chatId,
+                                focusManager = focusManager
+                            )
+                            if (chatUser.typing) {
+                                TypingBubble()
+                            }
+                        }
+                        ReplyBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .imePadding(),
+                            reply = reply,
+                            onReplyChange = { reply = it },
+                            onSendReply = onSendReply,
+                            vm = vm,
+                            chatId = chatId,
+                            focusManager = focusManager
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TypingBubble() {
+    val dotCount = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            dotCount.animateTo(
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
             )
         }
-
-
     }
 
+    val dots = when (dotCount.value.toInt() % 4) {
+        0 -> ""
+        1 -> "."
+        2 -> ".."
+        else -> "..."
+    }
+
+    Row(
+        modifier = Modifier
+            .padding(8.dp)
+            .background(
+                color = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Typing$dots",
+            color = Color.Black,
+            fontSize = 14.sp
+        )
+    }
 }
+
+
 
 
 @Composable
@@ -188,12 +242,11 @@ fun MessageBox(
     chatUser: ChatUser,
     vm: CMViewModel,
     chatId: String,
-    currentUserId: String
+    currentUserId: String,
+    focusManager: FocusManager
 ) {
     val listState = rememberLazyListState()
-    var showDialog = rememberSaveable {
-        mutableStateOf(false)
-    }
+    var messageToDelete by remember { mutableStateOf<Message?>(null) } // Track which message to delete
 
     // Scroll to the bottom when chatMessages change
     LaunchedEffect(chatMessages) {
@@ -206,12 +259,8 @@ fun MessageBox(
         modifier = modifier,
         state = listState
     ) {
-        var prevDate: String = ""
-        val formatter = DateTimeFormatter.ofPattern("EEE MMM dd", Locale.ENGLISH)
 
-        val today = LocalDate.now()
-        val yesterday = today.minusDays(1)
-        var dateMsgStamp = ""
+
         items(chatMessages) { msg ->
             LaunchedEffect(msg) {
                 if (msg.sendBy != currentUserId && msg.status == MessageStatus.SENT) {
@@ -219,22 +268,29 @@ fun MessageBox(
                 }
             }
 
+            val formatter = DateTimeFormatter.ofPattern("EEE MMM dd", Locale.ENGLISH)
+            val today = LocalDate.now()
+            val yesterday = today.minusDays(1)
+            var dateMsgStamp = ""
 
             val alignment = if (msg.sendBy != currentUserId) Alignment.Start else Alignment.End
-            val color = if (msg.sendBy == currentUserId) sendMessageBgColor else Color.White
+            val color = if (msg.sendBy == currentUserId) sentMessageBackgroundColor else Color.White
 
+            dateMsgStamp = if (msg.timestamp.toString().substring(0, 10) == yesterday.format(formatter)) {
+                "Yesterday"
+            } else if (msg.timestamp.toString().substring(0, 10) == today.format(formatter)) {
+                "Today"
+            } else {
+                msg.timestamp.toString().substring(0, 10)
+            }
 
-                dateMsgStamp = if (msg.timestamp.toString().substring(0, 10) == yesterday.format(
-                        formatter
-                    )
-                ) "Yesterday" else if (msg.timestamp.toString()
-                        .substring(0, 10) == today.format(formatter)
-                ) "Today" else msg.timestamp.toString().substring(0, 10)
-
-
-            if(prevDate!=msg.timestamp.toString().substring(0, 10)) {
-                Row (modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center) {
+            if (vm.prevDate != msg.timestamp.toString().substring(0, 10)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { focusManager.clearFocus() },
+                    horizontalArrangement = Arrangement.Center
+                ) {
                     Text(
                         text = "  $dateMsgStamp  ",
                         color = Color.Gray,
@@ -244,17 +300,22 @@ fun MessageBox(
                             .clip(RoundedCornerShape(20.dp))
                     )
                 }
-                prevDate = msg.timestamp.toString().substring(0, 10)
+                vm.prevDate = msg.timestamp.toString().substring(0, 10)
             }
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(top = 16.dp, bottom = 16.dp, start = 8.dp, end = 8.dp)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onLongPress = {
-                                showDialog.value = true
+                                if (msg.sendBy == currentUserId) {
+                                    messageToDelete = msg
+                                }
+                            },
+                            onTap = {
+                                focusManager.clearFocus()
                             }
                         )
                     },
@@ -263,32 +324,32 @@ fun MessageBox(
                 Column(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if(msg.message=="Message Deleted") Color.Gray else color)
+                        .background(if (msg.message == "Message Deleted") Color.Gray else color)
                         .padding(start = 8.dp, top = 4.dp, end = 4.dp, bottom = 4.dp)
                 ) {
                     Text(
                         text = msg.message ?: "",
-                        color = if(msg.message=="Message Deleted") Color.White else Color.Black,
+                        color = if (msg.message == "Message Deleted") Color.White else Color.Black,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .padding(top = 4.dp, start = 4.dp, bottom = 5.dp, end = 10.dp)
-                            .widthIn(min = 0.dp, max = 300.dp) // Max width 300.dp, wrap if smaller
+                            .widthIn(min = 0.dp, max = 300.dp)
                             .wrapContentWidth()
                     )
 
-                    // Convert timestamp to 12-hour format
-                    val formattedTime = try {
-                        val inputFormatter = DateTimeFormatter.ofPattern(
-                            "EEE MMM dd HH:mm:ss z yyyy",
-                            Locale.ENGLISH
-                        )
-                        val outputFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH)
-                        val parsedDate = LocalDateTime.parse(msg.timestamp, inputFormatter)
-                        parsedDate.format(outputFormatter)
-                    } catch (e: Exception) {
-                        "Invalid Time"
-                    }
-                    if(msg.message!="Message Deleted") {
+                    if (msg.message != "Message Deleted") {
+                        val formattedTime = try {
+                            val inputFormatter = DateTimeFormatter.ofPattern(
+                                "EEE MMM dd HH:mm:ss z yyyy",
+                                Locale.ENGLISH
+                            )
+                            val outputFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH)
+                            val parsedDate = LocalDateTime.parse(msg.timestamp, inputFormatter)
+                            parsedDate.format(outputFormatter)
+                        } catch (e: Exception) {
+                            "Invalid Time"
+                        }
+
                         Row(modifier = Modifier.align(Alignment.End)) {
                             Text(
                                 text = formattedTime,
@@ -323,20 +384,25 @@ fun MessageBox(
                     }
                 }
             }
-            if (showDialog.value) {
-                CommonAlertDialog(
-                    message = "Do you still want to delete this message?",
-                    showDialog,
-                    onSuccess = {
-                        vm.deleteMsg(chatId,msg.timestamp.toString())
-                        showDialog.value = false
-                    },
-                    onDismiss = {
-                        showDialog.value = false
-                    }
-                )
-            }
         }
+    }
+
+    // Show delete confirmation dialog when a message is selected for deletion
+    messageToDelete?.let { msg ->
+        if(msg.message.equals("Message Deleted"))
+        {
+            vm.deleteMsg(chatId, msg.timestamp.toString())
+            messageToDelete = null
+        }
+        else
+        CommonAlertDialog(
+            message = "Do you want to delete this message?",
+            onDismiss = { messageToDelete = null },
+            onSuccess = {
+                vm.deleteMsg(chatId, msg.timestamp.toString())
+                messageToDelete = null
+            }
+        )
     }
 }
 
@@ -419,7 +485,9 @@ fun ReplyBox(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .background(Color.Transparent),
+
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             OutlinedTextField(
@@ -433,7 +501,6 @@ fun ReplyBox(
                     .weight(1f)
                     .fillMaxWidth()
                     .align(Alignment.CenterVertically)
-                    .height(textFieldHeight.dp) // 🔥 Dynamic height
                     .padding(start = 8.dp, end = 16.dp)
                     .onFocusChanged { focusState ->
                         coroutineScope.launch {
@@ -443,13 +510,18 @@ fun ReplyBox(
                             vm.updateTypingStatus(false)
                             vm.updateChatUserStatus(chatId = chatId)
                         }
-                    }
-                    .background(Color.White, shape = RoundedCornerShape(80.dp))
-                    .clip(RoundedCornerShape(20.dp)),
+                    },
                 keyboardOptions = KeyboardOptions.Default.copy(
                     imeAction = ImeAction.Default,  // 🔹 Allow Enter key
                     keyboardType = KeyboardType.Text
                 ),
+                singleLine = false,
+                maxLines = 3,
+                placeholder = {
+                    Text(
+                        "Type your message...",
+                        color = ChatMeColors.lightOnSurface.copy(alpha = 0.6f))
+                },
                 keyboardActions = KeyboardActions(
                     onSend = {
                         onSendReply()
@@ -457,43 +529,44 @@ fun ReplyBox(
                         focusManager.clearFocus()
                     }
                 ),
+                shape = ChatMeShapes.extraLarge,
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    containerColor = Color.White
+                    focusedBorderColor = ChatMeColors.lightPrimary,
+                    unfocusedBorderColor = ChatMeColors.divider,
+                    focusedTextColor = ChatMeColors.lightOnSurface,
+                    unfocusedTextColor = ChatMeColors.lightOnSurface,
+                    containerColor = ChatMeColors.lightSurface
                 )
             )
 
 
-            Card(
-                shape = CircleShape,
+            Button(
+                onClick = {onSendReply()
+                    keyboardController?.hide()
+                    focusManager.clearFocus()},
+                shape = ChatMeShapes.medium,
                 modifier = Modifier
-                    .size(50.dp)
-                    .clickable {
-                        onSendReply()
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                    }
+                    .height(56.dp)
+                    .padding(vertical = 8.dp)
                     .align(Alignment.Bottom),
-                colors = CardDefaults.cardColors(
-                    containerColor = Green,
-                    contentColor = Color.White,
-                    disabledContainerColor = Color.Gray,
-                    disabledContentColor = Color.White
-                )
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ChatMeColors.lightPrimary,
+                    contentColor = ChatMeColors.lightOnPrimary,
+                    disabledContainerColor = ChatMeColors.lightPrimary.copy(alpha = 0.5f),
+                    disabledContentColor = ChatMeColors.lightOnPrimary.copy(alpha = 0.5f)
+                ),
             ) {
                 Icon(
                     Icons.Default.Send,
                     contentDescription = "Send",
-                    Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
+                    Modifier.size(24.dp)
                 )
             }
+
             Spacer(modifier = Modifier.width(8.dp))
 
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -517,7 +590,8 @@ fun ChatHeader(
             .padding(8.dp)
             .clickable {
                 onBackClicked()
-            })
+            },
+            tint = ChatMeColors.darkPrimaryContainer)
         CommonImage(
             data = imageUrl,
             modifier = Modifier
@@ -528,7 +602,9 @@ fun ChatHeader(
         Column {
             Text(
                 text = name, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp)
+                modifier = Modifier.padding(start = 4.dp),
+                style = ChatMeTypography.titleLarge,
+                color = ChatMeColors.darkPrimaryContainer
             )
             Text(
                 text = if (isUserOnline) "Online" else (
