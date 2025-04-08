@@ -51,11 +51,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberImagePainter
+import com.prj.chatme.ui.theme.ChatMeColors
 import com.prj.chatme.ui.theme.DarkGreen
 import com.prj.chatme.ui.theme.DarkOrange
-import com.prj.chatme.ui.theme.DarkRed
 import java.text.SimpleDateFormat
 import java.util.*
+
+import android.content.Context
+import android.widget.Toast
+
 
 fun navigateTo(navController: NavController, route: String) {
 
@@ -277,12 +281,11 @@ fun UserInfoRow(
 @Composable
 fun CommonAlertDialog(
     message:String,
-    showDialog: MutableState<Boolean>,
     onSuccess: () -> Unit,
     onDismiss: () -> Unit
 ){
     AlertDialog(
-        onDismissRequest = { showDialog.value = false }, // Close dialog on dismiss
+        onDismissRequest = { onDismiss.invoke() }, // Close dialog on dismiss
         title = {
             Column {
                 Text(
@@ -307,7 +310,7 @@ fun CommonAlertDialog(
                     onSuccess.invoke()
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = DarkRed,
+                    containerColor = ChatMeColors.darkRed,
                     contentColor = Color.White,
                     disabledContainerColor = Color.Gray,
                     disabledContentColor = Color.White
@@ -330,4 +333,9 @@ fun CommonAlertDialog(
             }
         }
     )
+}
+
+
+fun showToast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

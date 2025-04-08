@@ -25,19 +25,31 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -60,269 +72,306 @@ import com.prj.chatme.CommonImage
 import com.prj.chatme.CommonProgressBar
 import com.prj.chatme.DestinatinScreen
 import com.prj.chatme.CMViewModel
+import com.prj.chatme.R
 import com.prj.chatme.TextFieldWithIcons
 import com.prj.chatme.navigateTo
+import com.prj.chatme.ui.theme.ChatMeColors
+import com.prj.chatme.ui.theme.ChatMeTheme
+import com.prj.chatme.ui.theme.ChatMeTypography
 import com.prj.chatme.ui.theme.DarkOrange
-import com.prj.chatme.ui.theme.DarkRed
 
 @Composable
 fun UserProfileScreen(navController: NavController, vm: CMViewModel) {
-    val inProgress = vm.inProgress.value
-    if (inProgress)
-        CommonProgressBar()
-    else {
-        val userData = vm.userData
-        var name by rememberSaveable {
-            mutableStateOf(userData.value?.name ?: "")
-        }
-        var number by rememberSaveable {
-            mutableStateOf(userData.value?.number ?: "")
-        }
-        var email by rememberSaveable {
-            mutableStateOf(userData.value?.email ?: "")
-        }
-        var showDialog = rememberSaveable {
-            mutableStateOf(false)
-        }
-        val focusManager = LocalFocusManager.current
+    ChatMeTheme {
+        val inProgress = vm.inProgress.value
+        val userData = vm.userData.value
 
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .clickable {
-                focusManager.clearFocus()
-            }) {
-            Column(
-                modifier = Modifier
-                    .wrapContentHeight()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                ProfileContent(modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp)
-                    .verticalScroll(
-                        rememberScrollState()
-                    ),
-                    name = name,
-                    number = number,
-                    email = email,
-                    onNameChanged = { name = it },
-                    onNumberChanged = { number = it },
-                    onEmailChanged = { email = it },
-                    vm = vm,
-                    onBack = {
-                        navController.popBackStack()
-                    },
-                    onSave = {
-                        vm.createOrUpdateProfile(name = name, number = number)
-                    },
-                    showDialog = showDialog,
-                    onDismiss = { showDialog.value = false },
-                    onLogout = {
-                        vm.userIsOffline()
-                        vm.logout()
-                        navigateTo(navController, DestinatinScreen.Login.route)
-                    })
+        if (inProgress) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ChatMeColors.lightPrimary)
             }
+        } else {
+            var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-            ) {
-                BottomNavigationMenu(
-                    selectedItem = BottomNavigationItem.PROFILE,
-                    navController = navController
-                )
+            Scaffold(
+                topBar = {
+                    ProfileTopAppBar(
+                        onBack = { navController.popBackStack() },
+                        onEdit = {
+                            navigateTo(navController, DestinatinScreen.EditProfile.route)
+                        }
+                    )
+                },
+                bottomBar = {
+                    BottomNavigationMenu(
+                        selectedItem = BottomNavigationItem.PROFILE,
+                        navController = navController
+                    )
+                }
+            ) { padding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .background(ChatMeColors.lightBackground)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Profile Image Section (View Only)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        ) {
+                            Card(
+                                shape = CircleShape,
+                                modifier = Modifier.size(120.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = ChatMeColors.lightSurface
+                                )
+                            ) {
+                                CommonImage(
+                                    data = userData?.imageUrl,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+
+                        // Profile Info Section (View Only)
+                        ProfileInfoSection(
+                            name = userData?.name ?: "",
+                            number = userData?.number ?: "",
+                            email = userData?.email ?: "",
+                            bio = userData?.bio ?: "No bio yet",
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+
+                        // Logout Button
+                        Button(
+                            onClick = { showLogoutDialog = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ChatMeColors.error,
+                                contentColor = ChatMeColors.lightOnPrimary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp)
+                        ) {
+                            Text("Logout", modifier = Modifier.padding(8.dp))
+                        }
+                    }
+
+                    // Logout Confirmation Dialog
+                    if (showLogoutDialog) {
+                        LogoutConfirmationDialog(
+                            onDismiss = { showLogoutDialog = false },
+                            onConfirm = {
+                                vm.userIsOffline()
+                                vm.logout()
+                                navigateTo(navController, DestinatinScreen.Login.route)
+                            }
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileContent(
-    modifier: Modifier = Modifier,
+private fun ProfileTopAppBar(onBack: () -> Unit, onEdit: () -> Unit) {
+    CenterAlignedTopAppBar(
+        title = {
+            Text(
+                "My Profile",
+                style = ChatMeTypography.titleLarge,
+                color = ChatMeColors.darkPrimaryContainer
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = ChatMeColors.darkPrimaryContainer
+                )
+            }
+        },
+        actions = {
+            TextButton(onClick = onEdit) {
+                Text(
+                    "Edit",
+                    style = ChatMeTypography.bodyLarge,
+                    color = ChatMeColors.darkPrimaryContainer
+                )
+            }
+        },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = ChatMeColors.lightPrimaryContainer,
+            titleContentColor = ChatMeColors.darkPrimaryContainer,
+            actionIconContentColor = ChatMeColors.darkPrimaryContainer
+        )
+    )
+}
+
+@Composable
+private fun ProfileInfoSection(
     name: String,
     number: String,
     email: String,
-    onNameChanged: (String) -> Unit,
-    onNumberChanged: (String) -> Unit,
-    onEmailChanged: (String) -> Unit,
-    showDialog: MutableState<Boolean>,
-    onDismiss: () -> Unit,
-    vm: CMViewModel,
-    onBack: () -> Unit,
-    onSave: () -> Unit,
-    onLogout: () -> Unit
+    bio: String,
+    modifier: Modifier = Modifier
 ) {
-    // var showDialog by remember { mutableStateOf(false) } // Manage dialog visibility state
-
-    val imageUrl = vm.userData.value?.imageUrl
-
     Column(
-
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .background(DarkOrange),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "Back", modifier = Modifier.clickable { onBack.invoke() }.padding(8.dp))
-            Text(text = "Save", modifier = Modifier.clickable { onSave.invoke() }.padding(8.dp))
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        ProfileImage(imageUrl = imageUrl, vm = vm)
-        Spacer(modifier = Modifier.height(32.dp))
-
-        TextFieldWithIcons(
-            icon = Icons.Default.Face,
+        // Name Field
+        ProfileInfoItem(
             label = "Name",
             value = name,
-            placeholder = "Enter your name",
-            contentDescription = "Name",
-            onValueChange = { onNameChanged(it) }
+            icon = Icons.Default.Person
         )
-        Spacer(modifier = Modifier.height(16.dp))
 
-        TextFieldWithIcons(
-            icon = Icons.Default.Call,
-            label = "Phone Number",
+        // Number Field
+        ProfileInfoItem(
+            label = "Phone",
             value = number,
-            placeholder = "Enter your phone number",
-            contentDescription = "Phone Number",
-            onValueChange = { onNumberChanged(it) }
+            icon = Icons.Default.Call
         )
-        Spacer(modifier = Modifier.height(16.dp))
 
-        TextFieldWithIcons(
-            icon = Icons.Default.Email,
+        // Email Field
+        ProfileInfoItem(
             label = "Email",
             value = email,
-            placeholder = "Enter your email",
-            contentDescription = "Email",
-            onValueChange = { onEmailChanged(it) }
+            icon = Icons.Default.Email
         )
-        Spacer(modifier = Modifier.height(32.dp))
 
-        // Logout Button
-        Button(
-            onClick = { showDialog.value = true }, // Show the dialog
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Red,
-                contentColor = Color.White,
-                disabledContainerColor = Color.Gray,
-                disabledContentColor = Color.White
-            )
+        // Bio Section
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
         ) {
-            Text(text = "Logout", modifier = Modifier.padding(8.dp), color = Color.White)
-        }
-    }
-
-    // Show the Logout Confirmation Dialog
-    if (showDialog.value) {
-        AlertDialog(
-            onDismissRequest = { showDialog.value = false }, // Close dialog on dismiss
-            title = {
-                Column {
-                    Text(
-                        text = "Think Again...",
-                        modifier = Modifier.padding(8.dp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Red,
-                        fontSize = 27.sp
-                    )
-                    Text(
-                        text = "Do You Still Want to Logout?",
-                        modifier = Modifier.padding(8.dp),
-                        fontWeight = FontWeight.Light,
-                        color = Color.Red,
-                        fontSize = 18.sp
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showDialog.value = false // Close the dialog
-                        onLogout.invoke() // Perform logout
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkRed,
-                        contentColor = Color.White,
-                        disabledContainerColor = Color.Gray,
-                        disabledContentColor = Color.White
-                    )
-                ) {
-                    Text(text = "Just, Do it!")
-                }
-            },
-            dismissButton = {
-                Button(
-                    onClick = { showDialog.value = false },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkGreen,
-                        contentColor = Color.White,
-                        disabledContainerColor = Color.Gray,
-                        disabledContentColor = Color.White
-                    )
-                ) {
-                    Text(text = "No, Leave it!")
-                }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 4.dp)
+            ) {
+                Icon(
+                    Icons.Default.Face,
+                    contentDescription = "Bio",
+                    tint = ChatMeColors.lightPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Bio",
+                    style = ChatMeTypography.bodyMedium,
+                    color = ChatMeColors.lightPrimary
+                )
             }
-        )
+            Text(
+                text = bio,
+                style = ChatMeTypography.bodyMedium,
+                color = ChatMeColors.lightOnSurface,
+                modifier = Modifier.padding(start = 32.dp)
+            )
+        }
     }
 }
 
-
 @Composable
-fun ProfileImage(imageUrl: String?, vm: CMViewModel) {
-    Log.d("ProfileImage", "Image URL: $imageUrl") // Log the image URL
-
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri ->
-        uri?.let {
-            vm.uploadProfileImage(it)
-        }
-    }
-
-    Box(
+private fun ProfileInfoItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentWidth(Alignment.CenterHorizontally) // Centers Box content
-            .height(IntrinsicSize.Min),
-        contentAlignment = Alignment.Center // Ensures content inside Box is centered
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier
-                .clickable {
-                    launcher.launch("image/*")
-                },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Card(
-                shape = CircleShape,
-                modifier = Modifier
-                    .size(100.dp)
-                    .align(Alignment.CenterHorizontally) // Ensures Card is centered
-            ) {
-                CommonImage(
-                    data = imageUrl,
-                    modifier = Modifier.fillMaxSize(), // Ensure Image takes full space in Card
-                    contentScale = ContentScale.Crop
-                )
-            }
-            Text(text = "Change profile picture", modifier = Modifier.align(Alignment.CenterHorizontally))
-        }
-
-        if (vm.inProgress.value) {
-            CommonProgressBar()
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = ChatMeColors.lightPrimary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(
+                text = label,
+                style = ChatMeTypography.labelSmall,
+                color = ChatMeColors.lightOnSurface.copy(alpha = 0.6f)
+            )
+            Text(
+                text = value.ifEmpty { "Not provided" },
+                style = ChatMeTypography.bodyMedium,
+                color = ChatMeColors.lightOnSurface
+            )
         }
     }
+}
+
+// Keep the same LogoutConfirmationDialog as before
+
+@Composable
+ fun LogoutConfirmationDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = "Warning",
+                tint = ChatMeColors.error
+            )
+        },
+        title = {
+            Text(
+                text = "Confirm Logout",
+                style = ChatMeTypography.titleLarge,
+                color = ChatMeColors.error
+            )
+        },
+        text = {
+            Text(
+                text = "Are you sure you want to logout?",
+                style = ChatMeTypography.bodyLarge,
+                color = ChatMeColors.lightOnSurface
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.error
+                )
+            ) {
+                Text("Logout")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = ChatMeColors.lightOnSurface
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        containerColor = ChatMeColors.lightSurface,
+        titleContentColor = ChatMeColors.error,
+        textContentColor = ChatMeColors.lightOnSurface
+    )
 }

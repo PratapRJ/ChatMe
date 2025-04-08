@@ -28,38 +28,51 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SplashScreen(navController: NavController, vm: CMViewModel) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentAlignment = Alignment.Center
     ) {
-        val scale = remember{ Animatable(0f) }
-        val coroutineScope = rememberCoroutineScope()
-        LaunchedEffect(Unit){
-            coroutineScope.launch {
-                scale.animateTo(1f,tween(2000))
-            }
-           // delay(3000)
-            if(vm.signInSuccess.value){
-                navController.navigate("chatList")
-            }else{
-                navController.navigate("login")
+        val scale = remember { Animatable(0f) }
+
+        LaunchedEffect(Unit) {
+            scale.animateTo(1f, animationSpec = tween(2000))
+            delay(2100)
+
+            // Clear the entire back stack including splash screen
+            navController.navigate(
+                if (vm.signInSuccess.value) {
+                    if (vm.chatIdToNavigate != null) {
+                        "Chat/${vm.chatIdToNavigate}".also { vm.chatIdToNavigate = null }
+                    } else {
+                        "chatList"
+                    }
+                } else {
+                    "login"
+                }
+            ) {
+                // This clears the entire back stack up to and including the splash screen
+                popUpTo(0) { inclusive = true }
             }
         }
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_round), contentDescription = "Splash Screen Image",
-            alignment = Alignment.Center,
-            modifier = Modifier.scale(scale.value)
-        )
-        Text(
-            text = "ChatMe",
-            fontSize = 30.sp,
-            color = Color.Black,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.scale(scale.value)
-        )
 
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_round),
+                contentDescription = "Splash Screen Image",
+                modifier = Modifier.scale(scale.value)
+            )
+            Text(
+                text = "ChatMe",
+                fontSize = 30.sp,
+                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.scale(scale.value)
+            )
+        }
     }
 }

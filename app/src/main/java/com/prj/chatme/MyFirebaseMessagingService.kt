@@ -2,11 +2,11 @@ package com.prj.chatme
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModelProvider
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
@@ -24,6 +24,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             null
         }
     }
+
     override fun onNewToken(token: String) {
         getCurrentUserId()?.let { userId ->
             Firebase.firestore.collection(USER_NODE).document(userId)
@@ -35,32 +36,46 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        // 1. Handle notification when app is in foreground
+        // Handle foreground notification
         if (message.notification != null) {
-            showNotification(
-                title = message.notification?.title ?: "New message",
-                body = message.notification?.body ?: ""
-            )
-        }
+            val title = message.notification?.title ?: "New message"
+            val body = message.notification?.body ?: ""
+            val chatId = message.data["chatId"] ?: ""
 
-        // 2. Handle data payload (for when app is in background)
-        message.data.let { data ->
-            val chatId = data["chatId"]
-            // Navigate to chat if needed
+            showNotification(
+                title = title,
+                body = body,
+                chatId = chatId
+            )
         }
     }
 
-    private fun showNotification(title: String, body: String) {
+    private fun showNotification(title: String, body: String, chatId: String) {
         val channelId = "chatme_notifications"
+
+        // Create intent to open MainActivity and pass chatId
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("chatId", chatId)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.chat_icon) // Create this icon
+            .setSmallIcon(R.drawable.ic_launcher_round) // Replace with your actual icon
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
 
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        // Create channel (required for Android 8.0+)
+        // Create notification channel for Android 8.0+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
